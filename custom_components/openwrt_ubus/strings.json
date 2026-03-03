@@ -18,6 +18,10 @@
           "tracking_method": "Tracking Method"
         }
       },
+      "http_warning": {
+        "title": "Security Warning",
+        "description": "You are connecting to {host} over plain HTTP. Your router username and password will be transmitted unencrypted over the network. Consider enabling HTTPS on your router or ensuring HA and the router are on a trusted LAN segment."
+      },
       "sensors": {
         "title": "OpenWrt ubus - Sensor Configuration",
         "description": "Choose which sensor types to enable for {host}",

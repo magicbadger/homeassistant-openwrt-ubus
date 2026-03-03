@@ -33,6 +33,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _redact_session(session_id: str | None) -> str:
+    """Return a safe representation of a session ID for logging."""
+    if not session_id:
+        return "[no session]"
+    return f"[REDACTED ...{session_id[-4:]}]"
+
+
 class PreparedCall:
     def __init__(
         self,
@@ -104,7 +111,7 @@ class Ubus:
 
     async def _ensure_session_is_valid(self):
         """Ensure session is still valid"""
-        if self.session_expire <= (time.time() - 15):
+        if self.session_expire <= (time.time() + 15):
             await self.connect()
 
     async def api_call(
@@ -215,7 +222,7 @@ class Ubus:
                             method,
                             error_message,
                             error_code,
-                            self.session_id,
+                            _redact_session(self.session_id),
                         )
                         _append_result(
                             PermissionError(
@@ -230,7 +237,7 @@ class Ubus:
                             method,
                             error_message,
                             error_code,
-                            self.session_id,
+                            _redact_session(self.session_id),
                         )
                         _append_result(
                             ConnectionError(
@@ -276,7 +283,7 @@ class Ubus:
                     try:
                         raise session_response
                     except (RPCError, PermissionError) as e:
-                        _LOGGER.warning("Failed to retrieve session expiration: %s [session_id: %s]", e, self.session_id)
+                        _LOGGER.warning("Failed to retrieve session expiration: %s [session_id: %s]", e, _redact_session(self.session_id))
                 elif isinstance(session_response, list):
                     raise ConnectionError(f"Unexpected session API response format: {session_response}")
                 elif isinstance(session_response, dict):

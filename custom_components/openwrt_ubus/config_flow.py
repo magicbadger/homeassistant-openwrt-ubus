@@ -249,11 +249,26 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_HOST])
                 self._abort_if_unique_id_configured()
 
-                # Store connection data and proceed to sensor configuration
+                # Store connection data
                 self._connection_data = user_input
+
+                # Warn if connecting over plain HTTP
+                if not user_input.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS):
+                    return await self.async_step_http_warning()
+
                 return await self.async_step_sensors()
 
         return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
+
+    async def async_step_http_warning(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Warn that HTTP transmits credentials in cleartext."""
+        if user_input is not None:
+            return await self.async_step_sensors()
+        return self.async_show_form(
+            step_id="http_warning",
+            data_schema=vol.Schema({}),
+            description_placeholders={"host": self._connection_data[CONF_HOST]},
+        )
 
     async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the sensor configuration step."""

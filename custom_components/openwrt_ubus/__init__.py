@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
@@ -56,6 +57,53 @@ from .extended_ubus import ExtendedUbus
 from .shared_data_manager import SharedUbusDataManager
 
 _LOGGER = logging.getLogger(__name__)
+
+_UCI_NAME_RE = re.compile(r'^[a-zA-Z0-9_@.\[\]-]+$')
+
+
+def _validate_uci_name(value: str, field: str) -> None:
+    """Raise ValueError if value contains characters not valid in UCI names."""
+    if not _UCI_NAME_RE.match(value):
+        raise ValueError(f"Invalid UCI {field}: {value!r}")
+
+
+def _get_data_manager_for_call(hass, call_data: dict):
+    """Return the correct SharedUbusDataManager for a service call.
+
+    Uses the optional 'host' field from call data to find the right router.
+    If 'host' is omitted and only one router is configured, returns that one.
+    If 'host' is omitted and multiple routers are configured, logs an error
+    and returns None.
+    """
+    host = call_data.get("host")
+    managers = {
+        k: v for k, v in hass.data[DOMAIN].items()
+        if k.startswith("data_manager_")
+    }
+    if not managers:
+        _LOGGER.error("openwrt_ubus: No routers configured")
+        return None
+    if host:
+        for mgr in managers.values():
+            if mgr.entry.data[CONF_HOST] == host:
+                return mgr
+        known = [m.entry.data[CONF_HOST] for m in managers.values()]
+        _LOGGER.error(
+            "openwrt_ubus: No router with host '%s'. Configured hosts: %s",
+            host,
+            known,
+        )
+        return None
+    if len(managers) > 1:
+        known = [m.entry.data[CONF_HOST] for m in managers.values()]
+        _LOGGER.error(
+            "openwrt_ubus: Multiple routers configured (%s). "
+            "Specify 'host' field in service call to target a specific router.",
+            known,
+        )
+        return None
+    return next(iter(managers.values()))
+
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -158,15 +206,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 option = call.data.get("option")
                 target_entity_id = call.data.get("target_entity_id")
 
-                # Find a SharedUbusDataManager (single-router assumption)
-                shared_manager = None
-                for key, value in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value
-                        break
+                try:
+                    _validate_uci_name(config, "config")
+                    if section is not None:
+                        _validate_uci_name(section, "section")
+                    if option is not None:
+                        _validate_uci_name(option, "option")
+                except ValueError as exc:
+                    _LOGGER.error("Rejected uci_get: %s", exc)
+                    return
 
+                shared_manager = _get_data_manager_for_call(hass, call.data)
                 if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
                     return
 
                 # Use the data manager to obtain a connected ExtendedUbus client
@@ -213,19 +264,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             async def async_handle_uci_network_interface(call):
                 """Handle openwrt_ubus.uci_call service."""
-                # config = call.data["config"]
                 section = call.data["section"]
                 option = call.data["option"]
 
-                # Find a SharedUbusDataManager (single-router assumption)
-                shared_manager = None
-                for key, value in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value
-                        break
-
+                shared_manager = _get_data_manager_for_call(hass, call.data)
                 if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
                     return
 
                 # Use the data manager to obtain a connected ExtendedUbus client
@@ -243,14 +286,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 value = call.data["value"]
                 services_to_restart = call.data.get("service")
 
-                shared_manager = None
-                for key, value_dm in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value_dm
-                        break
+                try:
+                    _validate_uci_name(config, "config")
+                    _validate_uci_name(section, "section")
+                    _validate_uci_name(option, "option")
+                except ValueError as exc:
+                    _LOGGER.error("Rejected uci_set_commit: %s", exc)
+                    return
+                if any(c in value for c in ('\x00', '\n', '\r')):
+                    _LOGGER.error("Rejected uci_set_commit: value contains control characters")
+                    return
 
+                shared_manager = _get_data_manager_for_call(hass, call.data)
                 if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_set_commit")
                     return
 
                 client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]

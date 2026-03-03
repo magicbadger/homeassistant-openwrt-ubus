@@ -1,9 +1,10 @@
 """Extended Ubus client with specific OpenWrt functionality."""
 
 import logging
+import re
 
 from .Ubus import Ubus
-from .Ubus.interface import PreparedCall
+from .Ubus.interface import PreparedCall, _redact_session
 from .const import (
     API_RPC_CALL,
     API_RPC_LIST,
@@ -37,6 +38,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_NETWORK_IFACE_PATTERN = re.compile(r'^network\.interface\.[a-zA-Z0-9_-]+$')
+_NETWORK_IFACE_METHODS = frozenset({"up", "down", "status", "prepare", "remove", "dump", "add_device", "del_device"})
 
 
 class ExtendedUbus(Ubus):
@@ -317,6 +321,16 @@ class ExtendedUbus(Ubus):
         Returns:
             The result of the ubus API call or raises on errors from ``api_call``.
         """
+        if not _NETWORK_IFACE_PATTERN.match(section):
+            raise ValueError(
+                f"Invalid network interface path: {section!r}. "
+                "Must match 'network.interface.<name>'."
+            )
+        if option not in _NETWORK_IFACE_METHODS:
+            raise ValueError(
+                f"Invalid network interface method: {option!r}. "
+                f"Allowed: {sorted(_NETWORK_IFACE_METHODS)}"
+            )
         try:
             _LOGGER.debug("Calling UCI call network")
             return await self.api_call(API_RPC_CALL, section, option)
@@ -826,7 +840,7 @@ class ExtendedUbus(Ubus):
                     "To enable wired device tracking, configure ubus ACL to allow: "
                     '"/sbin/ip -[46] neigh show" in file.exec permissions. '
                     "Session ID: %s",
-                    self.session_id or "None"
+                    _redact_session(self.session_id)
                 )
                 _LOGGER.debug("Permission error details: %s", exc)
                 return {"error": "permission_denied"}
@@ -852,7 +866,7 @@ class ExtendedUbus(Ubus):
                     "To enable wired device tracking, configure ubus ACL to allow: "
                     '"/sbin/ip -[46] neigh show" in file.exec permissions. '
                     "Session ID: %s",
-                    self.session_id or "None"
+                    _redact_session(self.session_id)
                 )
                 _LOGGER.debug("Permission error details: %s", exc)
                 return {"error": "permission_denied"}
@@ -862,7 +876,7 @@ class ExtendedUbus(Ubus):
             _LOGGER.debug("Found %d IPv4 and %d IPv6 neighbors", len(result["ipv4"]), len(result["ipv6"]))
 
         except Exception as exc:
-            _LOGGER.error("Error getting IP neighbors, Session ID: %s - %s", self.session_id or "None", exc)
+            _LOGGER.error("Error getting IP neighbors, Session ID: %s - %s", _redact_session(self.session_id), exc)
 
         return result
 

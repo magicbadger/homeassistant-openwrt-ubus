@@ -1,7 +1,7 @@
 """OpenWrt ubus API Basic Constants."""
 
 # Basic ubus API constants
-API_DEF_DEBUG = True
+API_DEF_DEBUG = False
 API_DEF_SESSION_ID = "00000000000000000000000000000000"
 API_DEF_TIMEOUT = 15
 API_DEF_VERIFY = False

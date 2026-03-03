@@ -10,6 +10,15 @@ uci_get:
   name: UCI get
   description: Read a UCI value via ubus on the OpenWrt router and optionally write it to a sensor
   fields:
+    host:
+      name: Router host
+      description: >
+        Hostname or IP of the target router. Required when multiple OpenWrt
+        routers are configured. Must match the 'Host' field used during setup.
+      required: false
+      example: "192.168.1.1"
+      selector:
+        text:
     config:
       name: Config
       description: UCI config name (e.g. firewall)
@@ -43,6 +52,15 @@ uci_set_commit:
   name: UCI set + commit
   description: Set a UCI option value and commit the change
   fields:
+    host:
+      name: Router host
+      description: >
+        Hostname or IP of the target router. Required when multiple OpenWrt
+        routers are configured. Must match the 'Host' field used during setup.
+      required: false
+      example: "192.168.1.1"
+      selector:
+        text:
     config:
       name: Config
       description: UCI config name (e.g. firewall)
@@ -79,9 +97,18 @@ uci_set_commit:
       selector:
         text:
 uci_network_interface:
-  name: UCI call 
-  description: Call  UCI via ubus on the OpenWrt router 
+  name: UCI call
+  description: Call UCI via ubus on the OpenWrt router
   fields:
+    host:
+      name: Router host
+      description: >
+        Hostname or IP of the target router. Required when multiple OpenWrt
+        routers are configured. Must match the 'Host' field used during setup.
+      required: false
+      example: "192.168.1.1"
+      selector:
+        text:
     section:
       name: Section
       description: network interface (e.g. network.interface.wwan)
